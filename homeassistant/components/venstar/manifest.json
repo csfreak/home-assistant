@@ -3,5 +3,6 @@
   "name": "Venstar",
   "documentation": "https://www.home-assistant.io/integrations/venstar",
   "requirements": ["venstarcolortouch==0.12"],
-  "codeowners": []
+  "codeowners": ["@csfreak"],
+  "config_flow": true
 }

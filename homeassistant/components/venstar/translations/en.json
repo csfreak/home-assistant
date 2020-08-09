@@ -1,0 +1,37 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "data": {
+                    "host": "[%key:common::config_flow::data::host%]",
+                    "humidifier": "Enable Humidifier",
+                    "interval": "Polling Interval (in seconds)",
+                    "password": "[%key:common::config_flow::data::password%]",
+                    "pin": "Screen Lock Code",
+                    "ssl": "Use SSL",
+                    "timeout": "Connection Timeout (in seconds)",
+                    "username": "[%key:common::config_flow::data::username%]"
+                },
+                "title": "Configure a Venstar Thermostat"
+            }
+        }
+    },
+    "error": {
+        "cannot_connect": "Failed to connect, please try again"
+    },
+    "options": {
+        "step": {
+            "init": {
+                "data": {
+                    "humidifier": "Enable Humidifier",
+                    "interval": "Polling Interval (in seconds)",
+                    "password": "[%key:common::config_flow::data::password%]",
+                    "pin": "Screen Lock Code",
+                    "ssl": "Use SSL",
+                    "timeout": "Connection Timeout (in seconds)",
+                    "username": "[%key:common::config_flow::data::username%]"
+                }
+            }
+        }
+    }
+}

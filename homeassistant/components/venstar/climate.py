@@ -1,10 +1,7 @@
 """Support for Venstar WiFi Thermostats."""
 import logging
 
-from venstarcolortouch import VenstarColorTouch
-import voluptuous as vol
-
-from homeassistant.components.climate import PLATFORM_SCHEMA, ClimateEntity
+from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import (
     ATTR_HVAC_MODE,
     ATTR_TARGET_TEMP_HIGH,
@@ -29,79 +26,45 @@ from homeassistant.components.climate.const import (
 )
 from homeassistant.const import (
     ATTR_TEMPERATURE,
-    CONF_HOST,
-    CONF_PASSWORD,
-    CONF_PIN,
-    CONF_SSL,
-    CONF_TIMEOUT,
-    CONF_USERNAME,
     PRECISION_HALVES,
     STATE_ON,
     TEMP_CELSIUS,
     TEMP_FAHRENHEIT,
 )
-import homeassistant.helpers.config_validation as cv
+
+from .const import (
+    ATTR_FAN_STATE,
+    ATTR_HVAC_STATE,
+    CONF_HUMIDIFIER,
+    DOMAIN,
+    HOLD_MODE_TEMPERATURE,
+    VENSTAR_CLIENT,
+    VENSTAR_COORDINATOR,
+)
 
 _LOGGER = logging.getLogger(__name__)
-
-ATTR_FAN_STATE = "fan_state"
-ATTR_HVAC_STATE = "hvac_mode"
-
-CONF_HUMIDIFIER = "humidifier"
-
-DEFAULT_SSL = False
 
 VALID_FAN_STATES = [STATE_ON, HVAC_MODE_AUTO]
 VALID_THERMOSTAT_MODES = [HVAC_MODE_HEAT, HVAC_MODE_COOL, HVAC_MODE_OFF, HVAC_MODE_AUTO]
 
-HOLD_MODE_OFF = "off"
-HOLD_MODE_TEMPERATURE = "temperature"
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_HOST): cv.string,
-        vol.Optional(CONF_PASSWORD): cv.string,
-        vol.Optional(CONF_HUMIDIFIER, default=True): cv.boolean,
-        vol.Optional(CONF_SSL, default=DEFAULT_SSL): cv.boolean,
-        vol.Optional(CONF_TIMEOUT, default=5): vol.All(
-            vol.Coerce(int), vol.Range(min=1)
-        ),
-        vol.Optional(CONF_USERNAME): cv.string,
-        vol.Optional(CONF_PIN): cv.string,
-    }
-)
-
-
-def setup_platform(hass, config, add_entities, discovery_info=None):
-    """Set up the Venstar thermostat."""
-
-    username = config.get(CONF_USERNAME)
-    password = config.get(CONF_PASSWORD)
-    pin = config.get(CONF_PIN)
-    host = config.get(CONF_HOST)
-    timeout = config.get(CONF_TIMEOUT)
-    humidifier = config.get(CONF_HUMIDIFIER)
-
-    protocol = "https" if config[CONF_SSL] else "http"
-
-    client = VenstarColorTouch(
-        addr=host,
-        timeout=timeout,
-        user=username,
-        password=password,
-        pin=pin,
-        proto=protocol,
-    )
-
-    add_entities([VenstarThermostat(client, humidifier)], True)
+async def async_setup_entry(hass, config_entry, async_add_entities):
+    """Create Entity for Venstar Thermostat."""
+    domain_data = hass.data[DOMAIN][config_entry.entry_id]
+    client = domain_data[VENSTAR_CLIENT]
+    humidifier = domain_data[CONF_HUMIDIFIER]
+    coordinator = domain_data[VENSTAR_COORDINATOR]
+    thermostat = VenstarThermostat(client, coordinator, humidifier)
+    async_add_entities([thermostat], True)
 
 
 class VenstarThermostat(ClimateEntity):
     """Representation of a Venstar thermostat."""
 
-    def __init__(self, client, humidifier):
+    def __init__(self, client, coordinator, humidifier):
         """Initialize the thermostat."""
         self._client = client
+        self._coordinator = coordinator
         self._humidifier = humidifier
         self._mode_map = {
             HVAC_MODE_HEAT: self._client.MODE_HEAT,
@@ -109,12 +72,10 @@ class VenstarThermostat(ClimateEntity):
             HVAC_MODE_AUTO: self._client.MODE_AUTO,
         }
 
-    def update(self):
-        """Update the data from the thermostat."""
-        info_success = self._client.update_info()
-        sensor_success = self._client.update_sensors()
-        if not info_success or not sensor_success:
-            _LOGGER.error("Failed to update data")
+    @property
+    def unique_id(self):
+        """Return the uniqueid of the thermostat."""
+        return f"{self._client.addr}_{self._client.name.lower()}"
 
     @property
     def supported_features(self):
@@ -349,3 +310,16 @@ class VenstarThermostat(ClimateEntity):
 
         if not success:
             _LOGGER.error("Failed to change the schedule/hold state")
+
+    async def async_added_to_hass(self):
+        """When entity is added to hass."""
+        self.async_on_remove(
+            self._coordinator.async_add_listener(self.async_write_ha_state)
+        )
+
+    async def async_update(self):
+        """Update the entity.
+
+        Only used by the generic entity update service.
+        """
+        await self._coordinator.async_request_refresh()
